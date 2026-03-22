@@ -381,4 +381,150 @@
 
         modeBtn.addEventListener('click', () => {
             if (mode === 'CO') {
-                mode = '
+                mode = 'CPE';
+                modeBtn.textContent = '模式：用戶端 (順時針)';
+                modeBtn.style.backgroundColor = '#f59e0b'; 
+            } else {
+                mode = 'CO';
+                modeBtn.textContent = '模式：局端 (逆時針)';
+                modeBtn.style.backgroundColor = '#3b82f6'; 
+            }
+            renderCircles(); 
+        });
+
+        // 長按事件
+        let longPressTimer;
+        let activeCircleNum = null;
+        const statusModal = document.getElementById('statusModal');
+        
+        function bindLongPressEvent(circle, num) {
+            const startPress = (e) => {
+                if (!isLocked) return; 
+                e.preventDefault(); 
+                
+                longPressTimer = setTimeout(() => {
+                    activeCircleNum = num;
+                    statusModal.classList.remove('hidden');
+                    statusModal.classList.add('flex');
+                }, 400); 
+            };
+
+            const cancelPress = () => clearTimeout(longPressTimer);
+
+            circle.addEventListener('touchstart', startPress, { passive: false });
+            circle.addEventListener('mousedown', startPress);
+
+            circle.addEventListener('touchend', cancelPress);
+            circle.addEventListener('touchmove', cancelPress);
+            circle.addEventListener('mouseup', cancelPress);
+            circle.addEventListener('mouseleave', cancelPress);
+        }
+
+        function getStateClass(val) {
+            switch(val) {
+                case 'A組打前50': return 'state-a-front';
+                case 'A組打後50': return 'state-a-back';
+                case 'B組打前50': return 'state-b-front';
+                case 'B組打後50': return 'state-b-back';
+                case '完成': return 'state-done';
+                default: return '';
+            }
+        }
+
+        document.querySelectorAll('.status-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const statusVal = e.target.getAttribute('data-val');
+                if (activeCircleNum !== null) {
+                    if (statusVal) {
+                        circleStates[activeCircleNum] = statusVal;
+                    } else {
+                        delete circleStates[activeCircleNum]; 
+                    }
+                    renderCircles(); 
+                }
+                statusModal.classList.add('hidden');
+                statusModal.classList.remove('flex');
+            });
+        });
+
+        document.getElementById('closeModalBtn').addEventListener('click', () => {
+            statusModal.classList.add('hidden');
+            statusModal.classList.remove('flex');
+        });
+
+        // 側拉選單
+        const menuBtn = document.getElementById('menuBtn');
+        const sidebar = document.getElementById('sidebar');
+        const sidebarOverlay = document.getElementById('sidebarOverlay');
+        const saveBtn = document.getElementById('saveBtn');
+        const resetBtn = document.getElementById('resetBtn');
+
+        function toggleSidebar() {
+            const isClosed = sidebar.classList.contains('-translate-x-full');
+            if (isClosed) {
+                sidebar.classList.remove('-translate-x-full');
+                sidebarOverlay.classList.remove('hidden');
+            } else {
+                sidebar.classList.add('-translate-x-full');
+                sidebarOverlay.classList.add('hidden');
+            }
+        }
+
+        menuBtn.addEventListener('click', toggleSidebar);
+        sidebarOverlay.addEventListener('click', toggleSidebar);
+
+        saveBtn.addEventListener('click', () => {
+            try {
+                const stateToSave = {
+                    mode: mode,
+                    isLocked: isLocked,
+                    circleStates: circleStates,
+                    rotations: {
+                        inner: rings.inner.rotation,
+                        middle: rings.middle.rotation,
+                        outer: rings.outer.rotation
+                    }
+                };
+                localStorage.setItem('fs2400_state', JSON.stringify(stateToSave));
+                alert('✅ 儲存成功！\n下次開啟網頁將自動載入目前的狀態。');
+            } catch (e) {
+                alert('⚠️ 儲存失敗：您可能使用了無痕模式或在不支援的瀏覽器(如 LINE 內部)開啟，無法寫入進度。');
+            }
+            toggleSidebar(); 
+        });
+
+        resetBtn.addEventListener('click', () => {
+            const confirmReset = confirm('⚠️ 確定要還原到初始狀態嗎？\n這將清除目前畫面所有狀態與已儲存的進度。');
+            if (confirmReset) {
+                try {
+                    localStorage.removeItem('fs2400_state');
+                } catch(e) {}
+                
+                mode = 'CO';
+                isLocked = false;
+                
+                Object.keys(circleStates).forEach(key => delete circleStates[key]); 
+
+                Object.values(rings).forEach(r => {
+                    r.rotation = 0;
+                    r.element.style.transform = `rotate(0deg)`;
+                    r.element.classList.remove('locked');
+                });
+
+                lockBtn.textContent = '解鎖狀態';
+                lockBtn.className = 'unlocked';
+                lockBtn.style.backgroundColor = '#22c55e';
+                modeBtn.textContent = '模式：局端 (逆時針)';
+                modeBtn.style.backgroundColor = '#3b82f6';
+
+                renderCircles();
+                toggleSidebar();
+            }
+        });
+
+        // 啟動程式
+        init();
+
+    </script>
+</body>
+</html>
