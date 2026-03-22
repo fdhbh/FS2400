@@ -197,11 +197,11 @@
         const modeBtn = document.getElementById('modeBtn');
         const rings = {};
 
-        // 讀取進度
+        // 讀取進度 (加入 try-catch 保護)
         function loadState() {
-            const saved = localStorage.getItem('fs2400_state');
-            if (saved) {
-                try {
+            try {
+                const saved = localStorage.getItem('fs2400_state');
+                if (saved) {
                     const state = JSON.parse(saved);
                     mode = state.mode || 'CO';
                     isLocked = !!state.isLocked;
@@ -228,9 +228,9 @@
                     Object.values(rings).forEach(r => {
                         r.element.style.transform = `rotate(${r.rotation}deg)`;
                     });
-                } catch (e) {
-                    console.error("讀取存檔失敗", e);
                 }
+            } catch (e) {
+                console.warn("目前環境不支援讀取存檔", e);
             }
         }
 
@@ -246,4 +246,139 @@
                 
                 rings[config.id] = { element: ringEl, config: config, rotation: 0, circles: [] };
                 bindRotationEvents(ringEl, rings[config.id]);
-                scaleWrapper
+                scaleWrapper.appendChild(ringEl);
+            });
+
+            loadState(); 
+            renderCircles();
+            resizeApp(); 
+            window.addEventListener('resize', resizeApp); 
+        }
+
+        function resizeApp() {
+            const { width, height } = container.getBoundingClientRect();
+            const sizeNeeded = 560; 
+            const scale = Math.min(1, width / sizeNeeded, height / sizeNeeded);
+            scaleWrapper.style.transform = `scale(${scale})`;
+        }
+
+        function renderCircles() {
+            Object.values(rings).forEach(ringObj => {
+                const { element, config, rotation } = ringObj;
+                element.innerHTML = ''; 
+                ringObj.circles = [];
+
+                const angleStep = 360 / config.count;
+
+                config.seq.forEach((num, index) => {
+                    const circle = document.createElement('div');
+                    circle.className = `circle ${index === 0 ? 'representative' : ''}`;
+                    circle.style.width = `${config.size}px`;
+                    circle.style.height = `${config.size}px`;
+                    circle.innerText = num;
+
+                    let baseAngle = -90;
+                    let placementAngle = mode === 'CO' 
+                        ? baseAngle - (index * angleStep) 
+                        : baseAngle + (index * angleStep);
+                    
+                    circle.dataset.placementAngle = placementAngle; 
+
+                    if (circleStates[num]) {
+                        circle.setAttribute('data-status', circleStates[num]);
+                        circle.classList.add(getStateClass(circleStates[num]));
+                    }
+
+                    bindLongPressEvent(circle, num);
+
+                    element.appendChild(circle);
+                    ringObj.circles.push(circle);
+                });
+
+                updateCirclesRotation(ringObj);
+            });
+        }
+
+        function updateCirclesRotation(ringObj) {
+            const { radius, size } = ringObj.config;
+            const currentRingRot = ringObj.rotation;
+
+            ringObj.circles.forEach(circle => {
+                const placementAngle = parseFloat(circle.dataset.placementAngle);
+                circle.style.transform = `
+                    rotate(${placementAngle}deg) 
+                    translate(${radius}px) 
+                    rotate(${-placementAngle - currentRingRot}deg)
+                `;
+            });
+        }
+
+        function bindRotationEvents(element, ringObj) {
+            let isDragging = false;
+            let startAngle = 0;
+            let initialRotation = 0;
+
+            const getAngle = (x, y) => {
+                const rect = container.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                return Math.atan2(y - centerY, x - centerX) * (180 / Math.PI);
+            };
+
+            const onStart = (e) => {
+                if (isLocked) return;
+                if (e.target !== element && !e.target.classList.contains('circle')) return;
+                
+                isDragging = true;
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                
+                startAngle = getAngle(clientX, clientY);
+                initialRotation = ringObj.rotation;
+                e.preventDefault(); 
+            };
+
+            const onMove = (e) => {
+                if (!isDragging || isLocked) return;
+                
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                
+                const currentAngle = getAngle(clientX, clientY);
+                const delta = currentAngle - startAngle;
+                
+                ringObj.rotation = initialRotation + delta;
+                element.style.transform = `rotate(${ringObj.rotation}deg)`;
+                updateCirclesRotation(ringObj);
+            };
+
+            const onEnd = () => { isDragging = false; };
+
+            element.addEventListener('touchstart', onStart, { passive: false });
+            document.addEventListener('touchmove', onMove, { passive: false });
+            document.addEventListener('touchend', onEnd);
+
+            element.addEventListener('mousedown', onStart);
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onEnd);
+        }
+
+        // 控制列按鈕
+        lockBtn.addEventListener('click', () => {
+            isLocked = !isLocked;
+            if (isLocked) {
+                lockBtn.textContent = '鎖定狀態';
+                lockBtn.className = '';
+                lockBtn.style.backgroundColor = '#ef4444'; 
+                Object.values(rings).forEach(r => r.element.classList.add('locked'));
+            } else {
+                lockBtn.textContent = '解鎖狀態';
+                lockBtn.className = 'unlocked';
+                lockBtn.style.backgroundColor = '#22c55e'; 
+                Object.values(rings).forEach(r => r.element.classList.remove('locked'));
+            }
+        });
+
+        modeBtn.addEventListener('click', () => {
+            if (mode === 'CO') {
+                mode = '
