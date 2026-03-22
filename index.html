@@ -138,6 +138,23 @@
 </head>
 <body>
 
+    <button id="menuBtn" class="fixed top-4 left-4 z-50 bg-gray-800 text-white w-10 h-10 rounded-md shadow-lg flex items-center justify-center text-xl transition-transform active:scale-95">
+        ☰
+    </button>
+
+    <div id="sidebarOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden transition-opacity"></div>
+    
+    <div id="sidebar" class="fixed top-0 left-0 w-64 h-full bg-white shadow-2xl z-50 transform -translate-x-full transition-transform duration-300 flex flex-col p-6 gap-4">
+        <h2 class="text-xl font-bold mb-4 border-b pb-2 text-gray-800">系統選單</h2>
+        <button id="saveBtn" class="bg-blue-500 text-white py-3 rounded-lg font-bold shadow hover:bg-blue-600 active:bg-blue-700 transition">
+            💾 儲存目前進度
+        </button>
+        <p class="text-xs text-gray-500 mb-auto">儲存後，即使重整網頁或關閉分頁，下次開啟時會自動恢復設定檔與旋轉角度。</p>
+        
+        <button id="resetBtn" class="bg-red-500 text-white py-3 rounded-lg font-bold shadow hover:bg-red-600 active:bg-red-700 transition">
+            ⚠️ 還原初始狀態
+        </button>
+    </div>
     <div class="controls">
         <button id="lockBtn" class="unlocked">解鎖狀態</button>
         <button id="modeBtn">模式：局端 (逆時針)</button>
@@ -187,9 +204,51 @@
         const rings = {};
 
         // 初始化
+        // ---------------- 擴充：讀取儲存狀態 ----------------
+        function loadState() {
+            const saved = localStorage.getItem('fs2400_state');
+            if (saved) {
+                try {
+                    const state = JSON.parse(saved);
+                    mode = state.mode || 'CO';
+                    isLocked = !!state.isLocked;
+                    
+                    // 恢復圈圈狀態 (因為 circleStates 是 const，我們用 Object.assign 塞入屬性)
+                    Object.assign(circleStates, state.circleStates || {});
+
+                    // 恢復旋轉角度
+                    if (state.rotations) {
+                        if (rings.inner) rings.inner.rotation = state.rotations.inner || 0;
+                        if (rings.middle) rings.middle.rotation = state.rotations.middle || 0;
+                        if (rings.outer) rings.outer.rotation = state.rotations.outer || 0;
+                    }
+
+                    // 恢復按鈕介面狀態
+                    if (isLocked) {
+                        lockBtn.textContent = '鎖定狀態';
+                        lockBtn.className = '';
+                        lockBtn.style.backgroundColor = '#ef4444';
+                        Object.values(rings).forEach(r => r.element.classList.add('locked'));
+                    }
+                    if (mode === 'CPE') {
+                        modeBtn.textContent = '模式：用戶端 (順時針)';
+                        modeBtn.style.backgroundColor = '#f59e0b';
+                    }
+
+                    // 恢復各環的 CSS transform
+                    Object.values(rings).forEach(r => {
+                        r.element.style.transform = `rotate(${r.rotation}deg)`;
+                    });
+                } catch (e) {
+                    console.error("讀取存檔失敗", e);
+                }
+            }
+        }
+        // ---------------------------------------------------
+
+        // 修改原本的 init 函數
         function init() {
             ringConfigs.forEach(config => {
-                // 建立環的軌道
                 const ringEl = document.createElement('div');
                 ringEl.className = 'ring';
                 ringEl.id = `ring-${config.id}`;
@@ -197,19 +256,17 @@
                 ringEl.style.height = `${config.radius * 2}px`;
                 ringEl.style.zIndex = ringConfigs.length - ringConfigs.indexOf(config);
                 
-                // 儲存狀態
-                rings[config.id] = {
-                    element: ringEl,
-                    config: config,
-                    rotation: 0,
-                    circles: []
-                };
-
-                // 綁定事件
+                rings[config.id] = { element: ringEl, config: config, rotation: 0, circles: [] };
                 bindRotationEvents(ringEl, rings[config.id]);
-
-                scaleWrapper.appendChild(ringEl); // 附加到縮放容器中
+                scaleWrapper.appendChild(ringEl);
             });
+
+            // 在生成完外框後，先讀取進度，再進行渲染
+            loadState(); 
+            renderCircles();
+            resizeApp(); 
+            window.addEventListener('resize', resizeApp); 
+        }
 
             renderCircles();
             resizeApp(); // 初始化縮放比例
@@ -447,6 +504,78 @@
 
         // 啟動
         init();
+// --- 側拉選單與系統控制邏輯 ---
+        const menuBtn = document.getElementById('menuBtn');
+        const sidebar = document.getElementById('sidebar');
+        const sidebarOverlay = document.getElementById('sidebarOverlay');
+        const saveBtn = document.getElementById('saveBtn');
+        const resetBtn = document.getElementById('resetBtn');
+
+        // 開關側拉選單
+        function toggleSidebar() {
+            const isClosed = sidebar.classList.contains('-translate-x-full');
+            if (isClosed) {
+                sidebar.classList.remove('-translate-x-full');
+                sidebarOverlay.classList.remove('hidden');
+            } else {
+                sidebar.classList.add('-translate-x-full');
+                sidebarOverlay.classList.add('hidden');
+            }
+        }
+
+        menuBtn.addEventListener('click', toggleSidebar);
+        sidebarOverlay.addEventListener('click', toggleSidebar);
+
+        // 儲存進度 (Save)
+        saveBtn.addEventListener('click', () => {
+            const stateToSave = {
+                mode: mode,
+                isLocked: isLocked,
+                circleStates: circleStates,
+                rotations: {
+                    inner: rings.inner.rotation,
+                    middle: rings.middle.rotation,
+                    outer: rings.outer.rotation
+                }
+            };
+            localStorage.setItem('fs2400_state', JSON.stringify(stateToSave));
+            alert('✅ 儲存成功！\n下次開啟網頁將自動載入目前的狀態。');
+            toggleSidebar(); // 存完自動收起選單
+        });
+
+        // 還原初始狀態 (Reset)
+        resetBtn.addEventListener('click', () => {
+            const confirmReset = confirm('⚠️ 確定要還原到初始狀態嗎？\n這將清除目前畫面所有狀態與已儲存的進度。');
+            if (confirmReset) {
+                // 1. 清空儲存的資料
+                localStorage.removeItem('fs2400_state');
+
+                // 2. 重置變數
+                mode = 'CO';
+                isLocked = false;
+                
+                // 清空物件內部所有屬性
+                Object.keys(circleStates).forEach(key => delete circleStates[key]); 
+
+                // 3. 重置圓環旋轉角度
+                Object.values(rings).forEach(r => {
+                    r.rotation = 0;
+                    r.element.style.transform = `rotate(0deg)`;
+                    r.element.classList.remove('locked');
+                });
+
+                // 4. 重置上方按鈕樣式
+                lockBtn.textContent = '解鎖狀態';
+                lockBtn.className = 'unlocked';
+                lockBtn.style.backgroundColor = '#22c55e';
+                modeBtn.textContent = '模式：局端 (逆時針)';
+                modeBtn.style.backgroundColor = '#3b82f6';
+
+                // 5. 重新渲染畫面並關閉選單
+                renderCircles();
+                toggleSidebar();
+            }
+        });
 
     </script>
 </body>
