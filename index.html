@@ -3,20 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>線路對位工具</title>
+    <title>FS2400 線路對位工具</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script>
+        window.onerror = function(message, source, lineno, colno, error) {
+            alert('系統偵測到錯誤！\n請截圖給開發者：\n' + message + '\n行號: ' + lineno);
+            return false;
+        };
+    </script>
+
     <style>
+        /* ================= 介面基礎設定 ================= */
         body {
             margin: 0;
-            overflow: hidden;
-            background-color: #f8fafc;
-            touch-action: none;
+            overflow: hidden; /* 隱藏系統預設的滾動條 */
+            background-color: #000000;/*#f8fafc;網頁整體的背景顏色 (目前為淺灰藍色) */
+            touch-action: none; /* 【重要】禁止手機瀏覽器預設的滑動重整或縮放行為 */
             font-family: sans-serif;
             display: flex;
             flex-direction: column;
             height: 100vh;
         }
 
+        /* 上方控制按鈕區塊的背景與陰影 */
         .controls {
             display: flex;
             justify-content: center;
@@ -27,6 +37,7 @@
             z-index: 10;
         }
 
+        /* 上方按鈕的基本形狀與文字大小 */
         button {
             padding: 10px 20px;
             border-radius: 8px;
@@ -37,19 +48,12 @@
             transition: all 0.2s;
         }
 
-        #lockBtn {
-            background-color: #ef4444;
-            color: white;
-        }
-        #lockBtn.unlocked {
-            background-color: #22c55e;
-        }
+        /* 鎖定/解鎖 按鈕的顏色設定 */
+        #lockBtn { background-color: #ef4444; color: white; } /* 鎖定時：紅色 */
+        #lockBtn.unlocked { background-color: #22c55e; }      /* 解鎖時：綠色 */
+        #modeBtn { background-color: #3b82f6; color: white; } /* 模式切換按鈕：藍色 */
 
-        #modeBtn {
-            background-color: #3b82f6;
-            color: white;
-        }
-
+        /* ================= 畫布與圓環設定 ================= */
         .wheel-container {
             flex: 1;
             display: flex;
@@ -58,6 +62,7 @@
             position: relative;
         }
 
+        /* 最中心的那個黑色小圓點 */
         .center-point {
             position: absolute;
             width: 4px;
@@ -67,10 +72,11 @@
             z-index: 0;
         }
 
+        /* 黑色同心圓環(軌道)的設定 */
         .ring {
             position: absolute;
             border-radius: 50%;
-            border: 1px solid black;
+            border: 1px solid black; /* 軌道線條的粗細與顏色 */
             transform-origin: center center;
             cursor: grab;
             display: flex;
@@ -78,50 +84,49 @@
             justify-content: center;
         }
         
-        .ring:active {
-            cursor: grabbing;
-        }
+        .ring:active { cursor: grabbing; } /* 拖曳時的游標形狀 */
+        .ring.locked { cursor: not-allowed; } /* 鎖定時禁止拖曳的游標符號 */
 
-        .ring.locked {
-            cursor: not-allowed;
-        }
-
+        /* ================= 小圓圈的外觀設定 ================= */
         .circle {
             position: absolute;
             border-radius: 50%;
-            border: 2px solid red;
-            background: white;
+            border: 2px solid red; /* 一般圓圈的邊框：2px 紅色 */
+            background: white;     /* 一般圓圈的底色：白色 */
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: bold;
-            font-size: 24px;
-            color: black;
+            font-size: 26px;       /* 【想改字體大小在這裡】數字的大小 */
+            color: black;          /* 數字的顏色 */
             transform-origin: center center;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.15);
-            user-select: none;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.15); /* 圈圈的立體陰影 */
+            user-select: none;     /* 防止雙擊時選取到文字 */
         }
 
+        /* 「代表圈」(也就是4, 12, 24) 的特殊外觀設定 */
         .circle.representative {
-            background-color: #fef08a;
-            border-width: 4px;
-            border-color: #2563eb;
+            background-color: #fef08a; /* 代表圈的底色：黃色 */
+            border-width: 4px;         /* 代表圈的邊框加粗 */
+            border-color: #2563eb;     /* 代表圈的邊框顏色：藍色 */
         }
 
-        /* 狀態與提示樣式 */
-        .state-a-front { background-color: #bfdbfe !important; border-color: #3b82f6 !important; color: #1e3a8a !important; }
-        .state-a-back { background-color: #2563eb !important; border-color: #1e3a8a !important; color: white !important; }
-        .state-b-front { background-color: #e9d5ff !important; border-color: #a855f7 !important; color: #581c87 !important; }
-        .state-b-back { background-color: #9333ea !important; border-color: #581c87 !important; color: white !important; }
-        .state-done { background-color: #22c55e !important; border-color: #14532d !important; color: white !important; }
+        /* ================= 長按標記的狀態顏色設定 ================= */
+        /* 您可以修改後面的 background-color(底色) / border-color(邊框) / color(字體顏色) */
+        .state-a-front { background-color: #bfdbfe !important; border-color: #3b82f6 !important; color: #1e3a8a !important; } /* A前：淺藍 */
+        .state-a-back { background-color: #2563eb !important; border-color: #1e3a8a !important; color: white !important; }  /* A後：深藍 */
+        .state-b-front { background-color: #e9d5ff !important; border-color: #a855f7 !important; color: #581c87 !important; } /* B前：淺紫 */
+        .state-b-back { background-color: #9333ea !important; border-color: #581c87 !important; color: white !important; }  /* B後：深紫 */
+        .state-done { background-color: #22c55e !important; border-color: #14532d !important; color: white !important; }    /* 完成：綠色 */
 
+        /* 長按標記後，長在圈圈頭上的「文字小標籤」設定 */
         .circle[data-status]::after {
             content: attr(data-status);
             position: absolute;
-            top: -28px;
+            top: -28px; /* 標籤距離圈圈頂部的距離，如果圈圈放大，這裡的數字要更負(例如 -32px)才不會重疊 */
             left: 50%;
             transform: translateX(-50%);
-            font-size: 13px;
+            font-size: 13px; /* 標籤文字的大小 */
             font-weight: bold;
             white-space: nowrap;
             color: #111;
@@ -130,7 +135,7 @@
             border-radius: 4px;
             border: 1px solid #ccc;
             box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-            pointer-events: none;
+            pointer-events: none; /* 讓點擊穿透，不會干擾拖曳 */
         }
     </style>
 </head>
@@ -180,351 +185,394 @@
     </div>
 
     <script>
-        // 系統變數
-        let isLocked = false;
-        let mode = 'CO'; 
-        const circleStates = {}; 
+        // 確保網頁的 HTML 骨架都長出來後，才開始執行程式碼
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            // --- 1. 全域系統變數 ---
+            let isLocked = false;
+            let mode = 'CO'; 
+            const circleStates = {}; // 記憶每個號碼被標記了什麼狀態
 
-        const ringConfigs = [
-            { id: 'inner', radius: 60, count: 4, seq: [4, 1, 2, 3], size: 80 },
-            { id: 'middle', radius: 145, count: 8, seq: [12, 5, 6, 7, 8, 9, 10, 11], size: 80 },
-            { id: 'outer', radius: 230, count: 12, seq: [24, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23], size: 80 }
-        ];
+            // --- 2. 圓環核心參數設定檔 (★★★ 如果想改圈圈數量或大小，改這裡！) ---
+            // radius: 軌道半徑 (決定環有多大圈)
+            // count: 這一圈有幾個小圓
+            // seq: 數字排列陣列 (第一位就是代表圈)
+            // size: 小圓圈的直徑像素 (目前是80px)
+            const ringConfigs = [
+                { id: 'inner', radius: 60, count: 4, seq: [4, 1, 2, 3], size: 80 },
+                { id: 'middle', radius: 145, count: 8, seq: [12, 5, 6, 7, 8, 9, 10, 11], size: 80 },
+                { id: 'outer', radius: 230, count: 12, seq: [24, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23], size: 80 }
+            ];
 
-        const container = document.getElementById('wheelContainer');
-        const scaleWrapper = document.getElementById('scaleWrapper');
-        const lockBtn = document.getElementById('lockBtn');
-        const modeBtn = document.getElementById('modeBtn');
-        const rings = {};
+            const container = document.getElementById('wheelContainer');
+            const scaleWrapper = document.getElementById('scaleWrapper');
+            const lockBtn = document.getElementById('lockBtn');
+            const modeBtn = document.getElementById('modeBtn');
+            const rings = {}; // 用來存放生成的環與它的資料
 
-        // 讀取進度 (加入 try-catch 保護)
-        function loadState() {
-            try {
-                const saved = localStorage.getItem('fs2400_state');
-                if (saved) {
-                    const state = JSON.parse(saved);
-                    mode = state.mode || 'CO';
-                    isLocked = !!state.isLocked;
-                    
-                    Object.assign(circleStates, state.circleStates || {});
-
-                    if (state.rotations) {
-                        if (rings.inner) rings.inner.rotation = state.rotations.inner || 0;
-                        if (rings.middle) rings.middle.rotation = state.rotations.middle || 0;
-                        if (rings.outer) rings.outer.rotation = state.rotations.outer || 0;
-                    }
-
-                    if (isLocked) {
-                        lockBtn.textContent = '鎖定狀態';
-                        lockBtn.className = '';
-                        lockBtn.style.backgroundColor = '#ef4444';
-                        Object.values(rings).forEach(r => r.element.classList.add('locked'));
-                    }
-                    if (mode === 'CPE') {
-                        modeBtn.textContent = '模式：用戶端 (順時針)';
-                        modeBtn.style.backgroundColor = '#f59e0b';
-                    }
-
-                    Object.values(rings).forEach(r => {
-                        r.element.style.transform = `rotate(${r.rotation}deg)`;
-                    });
-                }
-            } catch (e) {
-                console.warn("目前環境不支援讀取存檔", e);
+            // 系統防呆：如果抓不到 HTML 元素，就停止執行
+            if (!container || !scaleWrapper || !lockBtn || !modeBtn) {
+                console.error("找不到核心 HTML 元素");
+                return;
             }
-        }
 
-        // 初始化
-        function init() {
-            ringConfigs.forEach(config => {
-                const ringEl = document.createElement('div');
-                ringEl.className = 'ring';
-                ringEl.id = `ring-${config.id}`;
-                ringEl.style.width = `${config.radius * 2}px`;
-                ringEl.style.height = `${config.radius * 2}px`;
-                ringEl.style.zIndex = ringConfigs.length - ringConfigs.indexOf(config);
-                
-                rings[config.id] = { element: ringEl, config: config, rotation: 0, circles: [] };
-                bindRotationEvents(ringEl, rings[config.id]);
-                scaleWrapper.appendChild(ringEl);
-            });
+            // --- 3. 儲存與讀取功能 ---
+            function loadState() {
+                try {
+                    const saved = localStorage.getItem('fs2400_state'); // 從手機瀏覽器抓取存檔
+                    if (saved) {
+                        const state = JSON.parse(saved);
+                        mode = state.mode || 'CO';
+                        isLocked = !!state.isLocked;
+                        
+                        Object.assign(circleStates, state.circleStates || {});
 
-            loadState(); 
-            renderCircles();
-            resizeApp(); 
-            window.addEventListener('resize', resizeApp); 
-        }
+                        // 恢復三個環的旋轉角度
+                        if (state.rotations) {
+                            if (rings.inner) rings.inner.rotation = state.rotations.inner || 0;
+                            if (rings.middle) rings.middle.rotation = state.rotations.middle || 0;
+                            if (rings.outer) rings.outer.rotation = state.rotations.outer || 0;
+                        }
 
-        function resizeApp() {
-            const { width, height } = container.getBoundingClientRect();
-            const sizeNeeded = 560; 
-            const scale = Math.min(1, width / sizeNeeded, height / sizeNeeded);
-            scaleWrapper.style.transform = `scale(${scale})`;
-        }
+                        // 根據存檔恢復按鈕的視覺外觀
+                        if (isLocked) {
+                            lockBtn.textContent = '鎖定狀態';
+                            lockBtn.className = '';
+                            lockBtn.style.backgroundColor = '#ef4444';
+                            Object.values(rings).forEach(r => r.element.classList.add('locked'));
+                        }
+                        if (mode === 'CPE') {
+                            modeBtn.textContent = '模式：用戶端 (順時針)';
+                            modeBtn.style.backgroundColor = '#f59e0b';
+                        }
 
-        function renderCircles() {
-            Object.values(rings).forEach(ringObj => {
-                const { element, config, rotation } = ringObj;
-                element.innerHTML = ''; 
-                ringObj.circles = [];
-
-                const angleStep = 360 / config.count;
-
-                config.seq.forEach((num, index) => {
-                    const circle = document.createElement('div');
-                    circle.className = `circle ${index === 0 ? 'representative' : ''}`;
-                    circle.style.width = `${config.size}px`;
-                    circle.style.height = `${config.size}px`;
-                    circle.innerText = num;
-
-                    let baseAngle = -90;
-                    let placementAngle = mode === 'CO' 
-                        ? baseAngle - (index * angleStep) 
-                        : baseAngle + (index * angleStep);
-                    
-                    circle.dataset.placementAngle = placementAngle; 
-
-                    if (circleStates[num]) {
-                        circle.setAttribute('data-status', circleStates[num]);
-                        circle.classList.add(getStateClass(circleStates[num]));
+                        // 套用旋轉角度到畫面上
+                        Object.values(rings).forEach(r => {
+                            r.element.style.transform = `rotate(${r.rotation}deg)`;
+                        });
                     }
+                } catch (e) {
+                    console.warn("目前環境不支援讀取存檔", e);
+                }
+            }
 
-                    bindLongPressEvent(circle, num);
+            // --- 4. 畫面自適應縮放邏輯 ---
+            function resizeApp() {
+                const rect = container.getBoundingClientRect();
+                const width = rect.width || window.innerWidth;
+                const height = rect.height || window.innerHeight;
+                
+                // 計算基礎：最外圈半徑(230) * 2 + 圈圈直徑(80) + 安全邊距(20) = 560
+                const sizeNeeded = 560; 
+                
+                // 計算縮放比例，確保不會超出螢幕，且最低不會縮小到看不見(0.2)
+                const scale = Math.max(0.2, Math.min(1, width / sizeNeeded, height / sizeNeeded));
+                scaleWrapper.style.transform = `scale(${scale})`;
+            }
 
-                    element.appendChild(circle);
-                    ringObj.circles.push(circle);
+            // --- 5. 確保圈圈文字永遠直立的演算法 ---
+            function updateCirclesRotation(ringObj) {
+                const { radius } = ringObj.config;
+                const currentRingRot = ringObj.rotation; // 目前整個環被轉了幾度
+
+                ringObj.circles.forEach(circle => {
+                    const placementAngle = parseFloat(circle.dataset.placementAngle);
+                    // 為了讓文字直立，圈圈本身必須「反向旋轉」去抵銷軌道和擺放的角度
+                    circle.style.transform = `
+                        rotate(${placementAngle}deg) 
+                        translate(${radius}px) 
+                        rotate(${-placementAngle - currentRingRot}deg)
+                    `;
+                });
+            }
+
+            // --- 6. 處理手指觸控與拖曳旋轉的核心 ---
+            function bindRotationEvents(element, ringObj) {
+                let isDragging = false;
+                let startAngle = 0;
+                let initialRotation = 0;
+
+                // 利用三角函數計算手指相對於畫面中心的角度
+                const getAngle = (x, y) => {
+                    const rect = container.getBoundingClientRect();
+                    const centerX = rect.left + rect.width / 2;
+                    const centerY = rect.top + rect.height / 2;
+                    return Math.atan2(y - centerY, x - centerX) * (180 / Math.PI);
+                };
+
+                const onStart = (e) => {
+                    if (isLocked) return; // 鎖定狀態禁止轉動
+                    if (e.target !== element && !e.target.classList.contains('circle')) return;
+                    
+                    isDragging = true;
+                    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                    
+                    startAngle = getAngle(clientX, clientY);
+                    initialRotation = ringObj.rotation;
+                    e.preventDefault(); 
+                };
+
+                const onMove = (e) => {
+                    if (!isDragging || isLocked) return;
+                    
+                    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                    
+                    const currentAngle = getAngle(clientX, clientY);
+                    const delta = currentAngle - startAngle; // 算出拖曳的角度差
+                    
+                    ringObj.rotation = initialRotation + delta;
+                    element.style.transform = `rotate(${ringObj.rotation}deg)`;
+                    updateCirclesRotation(ringObj); // 同步把裡面的文字轉正
+                };
+
+                const onEnd = () => { isDragging = false; };
+
+                // 綁定手機觸控與電腦滑鼠事件
+                element.addEventListener('touchstart', onStart, { passive: false });
+                document.addEventListener('touchmove', onMove, { passive: false });
+                document.addEventListener('touchend', onEnd);
+                element.addEventListener('mousedown', onStart);
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup', onEnd);
+            }
+
+            // --- 7. 長按標記狀態的觸發邏輯 ---
+            let longPressTimer;
+            let activeCircleNum = null;
+            const statusModal = document.getElementById('statusModal');
+            
+            function bindLongPressEvent(circle, num) {
+                const startPress = (e) => {
+                    if (!isLocked) return; // 只有在「鎖定狀態」下才允許長按標記
+                    e.preventDefault(); 
+                    
+                    // 【想改長按時間改這裡】 400 代表 400 毫秒 (0.4秒) 觸發
+                    longPressTimer = setTimeout(() => {
+                        activeCircleNum = num; // 記住使用者按了哪一顆
+                        statusModal.classList.remove('hidden'); // 顯示選單
+                        statusModal.classList.add('flex');
+                    }, 400); 
+                };
+
+                // 如果手指提早離開或滑動，就取消長按判定
+                const cancelPress = () => clearTimeout(longPressTimer);
+
+                circle.addEventListener('touchstart', startPress, { passive: false });
+                circle.addEventListener('mousedown', startPress);
+                circle.addEventListener('touchend', cancelPress);
+                circle.addEventListener('touchmove', cancelPress);
+                circle.addEventListener('mouseup', cancelPress);
+                circle.addEventListener('mouseleave', cancelPress);
+            }
+
+            // 輔助函式：將狀態文字轉換成對應的 CSS 類別名稱
+            function getStateClass(val) {
+                switch(val) {
+                    case 'A組打前50': return 'state-a-front';
+                    case 'A組打後50': return 'state-a-back';
+                    case 'B組打前50': return 'state-b-front';
+                    case 'B組打後50': return 'state-b-back';
+                    case '完成': return 'state-done';
+                    default: return '';
+                }
+            }
+
+            // --- 8. 繪製並排版所有圈圈 ---
+            function renderCircles() {
+                Object.values(rings).forEach(ringObj => {
+                    const { element, config } = ringObj;
+                    element.innerHTML = ''; // 清除舊的圈圈
+                    ringObj.circles = [];
+                    const angleStep = 360 / config.count; // 算出每顆圈圈的間隔角度
+
+                    config.seq.forEach((num, index) => {
+                        const circle = document.createElement('div');
+                        // 如果 index === 0，代表是這圈的第一個數字，加上 representative (代表圈) 的外觀
+                        circle.className = `circle ${index === 0 ? 'representative' : ''}`;
+                        circle.style.width = `${config.size}px`;
+                        circle.style.height = `${config.size}px`;
+                        circle.innerText = num;
+
+                        // 決定圈圈要排在軌道的哪個角度
+                        let baseAngle = -90; // -90度代表正上方(12點鐘方向)
+                        let placementAngle = mode === 'CO' 
+                            ? baseAngle - (index * angleStep) // 局端：逆時針排列
+                            : baseAngle + (index * angleStep); // 用戶端：順時針排列
+                        
+                        circle.dataset.placementAngle = placementAngle; 
+
+                        // 如果這顆圈圈曾經被標記過狀態，套用對應的樣式
+                        if (circleStates[num]) {
+                            circle.setAttribute('data-status', circleStates[num]);
+                            circle.classList.add(getStateClass(circleStates[num]));
+                        }
+
+                        bindLongPressEvent(circle, num); // 綁定長按監聽
+                        element.appendChild(circle);     // 畫到畫面上
+                        ringObj.circles.push(circle);    // 存入陣列供後續旋轉使用
+                    });
+
+                    updateCirclesRotation(ringObj); // 渲染完立刻把文字轉正
+                });
+            }
+
+            // --- 9. 系統啟動初始化流程 ---
+            function init() {
+                // 根據設定檔建立出三個軌道環
+                ringConfigs.forEach(config => {
+                    const ringEl = document.createElement('div');
+                    ringEl.className = 'ring';
+                    ringEl.id = `ring-${config.id}`;
+                    ringEl.style.width = `${config.radius * 2}px`;
+                    ringEl.style.height = `${config.radius * 2}px`;
+                    // 越內圈的 z-index 越大，確保不會被外圈蓋住點不到
+                    ringEl.style.zIndex = ringConfigs.length - ringConfigs.indexOf(config);
+                    
+                    rings[config.id] = { element: ringEl, config: config, rotation: 0, circles: [] };
+                    bindRotationEvents(ringEl, rings[config.id]); // 為這個環綁定拖曳功能
+                    scaleWrapper.appendChild(ringEl); // 把環裝入防裁切的縮放容器
                 });
 
-                updateCirclesRotation(ringObj);
-            });
-        }
-
-        function updateCirclesRotation(ringObj) {
-            const { radius, size } = ringObj.config;
-            const currentRingRot = ringObj.rotation;
-
-            ringObj.circles.forEach(circle => {
-                const placementAngle = parseFloat(circle.dataset.placementAngle);
-                circle.style.transform = `
-                    rotate(${placementAngle}deg) 
-                    translate(${radius}px) 
-                    rotate(${-placementAngle - currentRingRot}deg)
-                `;
-            });
-        }
-
-        function bindRotationEvents(element, ringObj) {
-            let isDragging = false;
-            let startAngle = 0;
-            let initialRotation = 0;
-
-            const getAngle = (x, y) => {
-                const rect = container.getBoundingClientRect();
-                const centerX = rect.left + rect.width / 2;
-                const centerY = rect.top + rect.height / 2;
-                return Math.atan2(y - centerY, x - centerX) * (180 / Math.PI);
-            };
-
-            const onStart = (e) => {
-                if (isLocked) return;
-                if (e.target !== element && !e.target.classList.contains('circle')) return;
-                
-                isDragging = true;
-                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-                
-                startAngle = getAngle(clientX, clientY);
-                initialRotation = ringObj.rotation;
-                e.preventDefault(); 
-            };
-
-            const onMove = (e) => {
-                if (!isDragging || isLocked) return;
-                
-                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-                
-                const currentAngle = getAngle(clientX, clientY);
-                const delta = currentAngle - startAngle;
-                
-                ringObj.rotation = initialRotation + delta;
-                element.style.transform = `rotate(${ringObj.rotation}deg)`;
-                updateCirclesRotation(ringObj);
-            };
-
-            const onEnd = () => { isDragging = false; };
-
-            element.addEventListener('touchstart', onStart, { passive: false });
-            document.addEventListener('touchmove', onMove, { passive: false });
-            document.addEventListener('touchend', onEnd);
-
-            element.addEventListener('mousedown', onStart);
-            document.addEventListener('mousemove', onMove);
-            document.addEventListener('mouseup', onEnd);
-        }
-
-        // 控制列按鈕
-        lockBtn.addEventListener('click', () => {
-            isLocked = !isLocked;
-            if (isLocked) {
-                lockBtn.textContent = '鎖定狀態';
-                lockBtn.className = '';
-                lockBtn.style.backgroundColor = '#ef4444'; 
-                Object.values(rings).forEach(r => r.element.classList.add('locked'));
-            } else {
-                lockBtn.textContent = '解鎖狀態';
-                lockBtn.className = 'unlocked';
-                lockBtn.style.backgroundColor = '#22c55e'; 
-                Object.values(rings).forEach(r => r.element.classList.remove('locked'));
+                loadState();   // 1. 嘗試讀取存檔
+                renderCircles(); // 2. 把圈圈畫出來
+                resizeApp();   // 3. 調整適合手機的大小
+                window.addEventListener('resize', resizeApp); // 4. 監聽螢幕旋轉，隨時重算大小
             }
-        });
 
-        modeBtn.addEventListener('click', () => {
-            if (mode === 'CO') {
-                mode = 'CPE';
-                modeBtn.textContent = '模式：用戶端 (順時針)';
-                modeBtn.style.backgroundColor = '#f59e0b'; 
-            } else {
-                mode = 'CO';
-                modeBtn.textContent = '模式：局端 (逆時針)';
-                modeBtn.style.backgroundColor = '#3b82f6'; 
-            }
-            renderCircles(); 
-        });
-
-        // 長按事件
-        let longPressTimer;
-        let activeCircleNum = null;
-        const statusModal = document.getElementById('statusModal');
-        
-        function bindLongPressEvent(circle, num) {
-            const startPress = (e) => {
-                if (!isLocked) return; 
-                e.preventDefault(); 
-                
-                longPressTimer = setTimeout(() => {
-                    activeCircleNum = num;
-                    statusModal.classList.remove('hidden');
-                    statusModal.classList.add('flex');
-                }, 400); 
-            };
-
-            const cancelPress = () => clearTimeout(longPressTimer);
-
-            circle.addEventListener('touchstart', startPress, { passive: false });
-            circle.addEventListener('mousedown', startPress);
-
-            circle.addEventListener('touchend', cancelPress);
-            circle.addEventListener('touchmove', cancelPress);
-            circle.addEventListener('mouseup', cancelPress);
-            circle.addEventListener('mouseleave', cancelPress);
-        }
-
-        function getStateClass(val) {
-            switch(val) {
-                case 'A組打前50': return 'state-a-front';
-                case 'A組打後50': return 'state-a-back';
-                case 'B組打前50': return 'state-b-front';
-                case 'B組打後50': return 'state-b-back';
-                case '完成': return 'state-done';
-                default: return '';
-            }
-        }
-
-        document.querySelectorAll('.status-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const statusVal = e.target.getAttribute('data-val');
-                if (activeCircleNum !== null) {
-                    if (statusVal) {
-                        circleStates[activeCircleNum] = statusVal;
-                    } else {
-                        delete circleStates[activeCircleNum]; 
-                    }
-                    renderCircles(); 
+            // ================= 以下為按鈕點擊事件綁定區 =================
+            
+            // 【控制列】鎖定/解鎖按鈕
+            lockBtn.addEventListener('click', () => {
+                isLocked = !isLocked;
+                if (isLocked) {
+                    lockBtn.textContent = '鎖定狀態';
+                    lockBtn.className = '';
+                    lockBtn.style.backgroundColor = '#ef4444'; 
+                    Object.values(rings).forEach(r => r.element.classList.add('locked'));
+                } else {
+                    lockBtn.textContent = '解鎖狀態';
+                    lockBtn.className = 'unlocked';
+                    lockBtn.style.backgroundColor = '#22c55e'; 
+                    Object.values(rings).forEach(r => r.element.classList.remove('locked'));
                 }
+            });
+
+            // 【控制列】模式切換按鈕
+            modeBtn.addEventListener('click', () => {
+                if (mode === 'CO') {
+                    mode = 'CPE';
+                    modeBtn.textContent = '模式：用戶端 (順時針)';
+                    modeBtn.style.backgroundColor = '#f59e0b'; 
+                } else {
+                    mode = 'CO';
+                    modeBtn.textContent = '模式：局端 (逆時針)';
+                    modeBtn.style.backgroundColor = '#3b82f6'; 
+                }
+                renderCircles(); // 切換模式後，必須重新把圈圈按照新方向排一次
+            });
+
+            // 【長按選單】點擊選項的邏輯
+            document.querySelectorAll('.status-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const statusVal = e.target.getAttribute('data-val');
+                    if (activeCircleNum !== null) {
+                        if (statusVal) {
+                            circleStates[activeCircleNum] = statusVal; // 記錄狀態
+                        } else {
+                            delete circleStates[activeCircleNum]; // 如果選「清除狀態」，就把紀錄刪掉
+                        }
+                        renderCircles(); // 重新渲染來套用顏色
+                    }
+                    statusModal.classList.add('hidden'); // 關閉視窗
+                    statusModal.classList.remove('flex');
+                });
+            });
+
+            // 【長按選單】取消按鈕
+            document.getElementById('closeModalBtn').addEventListener('click', () => {
                 statusModal.classList.add('hidden');
                 statusModal.classList.remove('flex');
             });
-        });
 
-        document.getElementById('closeModalBtn').addEventListener('click', () => {
-            statusModal.classList.add('hidden');
-            statusModal.classList.remove('flex');
-        });
+            // 【側拉選單】相關按鈕邏輯
+            const menuBtn = document.getElementById('menuBtn');
+            const sidebar = document.getElementById('sidebar');
+            const sidebarOverlay = document.getElementById('sidebarOverlay');
+            const saveBtn = document.getElementById('saveBtn');
+            const resetBtn = document.getElementById('resetBtn');
 
-        // 側拉選單
-        const menuBtn = document.getElementById('menuBtn');
-        const sidebar = document.getElementById('sidebar');
-        const sidebarOverlay = document.getElementById('sidebarOverlay');
-        const saveBtn = document.getElementById('saveBtn');
-        const resetBtn = document.getElementById('resetBtn');
-
-        function toggleSidebar() {
-            const isClosed = sidebar.classList.contains('-translate-x-full');
-            if (isClosed) {
-                sidebar.classList.remove('-translate-x-full');
-                sidebarOverlay.classList.remove('hidden');
-            } else {
-                sidebar.classList.add('-translate-x-full');
-                sidebarOverlay.classList.add('hidden');
+            // 開關側拉選單
+            function toggleSidebar() {
+                const isClosed = sidebar.classList.contains('-translate-x-full');
+                if (isClosed) {
+                    sidebar.classList.remove('-translate-x-full'); // 滑出
+                    sidebarOverlay.classList.remove('hidden');     // 顯示遮罩
+                } else {
+                    sidebar.classList.add('-translate-x-full');    // 收起
+                    sidebarOverlay.classList.add('hidden');        // 隱藏遮罩
+                }
             }
-        }
 
-        menuBtn.addEventListener('click', toggleSidebar);
-        sidebarOverlay.addEventListener('click', toggleSidebar);
+            menuBtn.addEventListener('click', toggleSidebar);
+            sidebarOverlay.addEventListener('click', toggleSidebar); // 點擊黑色遮罩也能關閉
 
-        saveBtn.addEventListener('click', () => {
-            try {
-                const stateToSave = {
-                    mode: mode,
-                    isLocked: isLocked,
-                    circleStates: circleStates,
-                    rotations: {
-                        inner: rings.inner.rotation,
-                        middle: rings.middle.rotation,
-                        outer: rings.outer.rotation
-                    }
-                };
-                localStorage.setItem('fs2400_state', JSON.stringify(stateToSave));
-                alert('✅ 儲存成功！\n下次開啟網頁將自動載入目前的狀態。');
-            } catch (e) {
-                alert('⚠️ 儲存失敗：您可能使用了無痕模式或在不支援的瀏覽器(如 LINE 內部)開啟，無法寫入進度。');
-            }
-            toggleSidebar(); 
-        });
-
-        resetBtn.addEventListener('click', () => {
-            const confirmReset = confirm('⚠️ 確定要還原到初始狀態嗎？\n這將清除目前畫面所有狀態與已儲存的進度。');
-            if (confirmReset) {
+            // 【側拉選單】儲存進度功能
+            saveBtn.addEventListener('click', () => {
                 try {
-                    localStorage.removeItem('fs2400_state');
-                } catch(e) {}
-                
-                mode = 'CO';
-                isLocked = false;
-                
-                Object.keys(circleStates).forEach(key => delete circleStates[key]); 
+                    const stateToSave = {
+                        mode: mode,
+                        isLocked: isLocked,
+                        circleStates: circleStates,
+                        rotations: {
+                            inner: rings.inner.rotation,
+                            middle: rings.middle.rotation,
+                            outer: rings.outer.rotation
+                        }
+                    };
+                    // 把狀態轉成字串，存入 localStorage
+                    localStorage.setItem('fs2400_state', JSON.stringify(stateToSave));
+                    alert('✅ 儲存成功！\n下次開啟網頁將自動載入目前的狀態。');
+                } catch (e) {
+                    alert('⚠️ 儲存失敗：您可能使用了無痕模式或在不支援的瀏覽器開啟，無法寫入進度。');
+                }
+                toggleSidebar(); // 存完自動收合選單
+            });
 
-                Object.values(rings).forEach(r => {
-                    r.rotation = 0;
-                    r.element.style.transform = `rotate(0deg)`;
-                    r.element.classList.remove('locked');
-                });
+            // 【側拉選單】還原初始狀態功能
+            resetBtn.addEventListener('click', () => {
+                const confirmReset = confirm('⚠️ 確定要還原到初始狀態嗎？\n這將清除目前畫面所有狀態與已儲存的進度。');
+                if (confirmReset) {
+                    try { localStorage.removeItem('fs2400_state'); } catch(e) {} // 刪除存檔
+                    
+                    mode = 'CO';
+                    isLocked = false;
+                    Object.keys(circleStates).forEach(key => delete circleStates[key]); // 清空狀態紀錄
 
-                lockBtn.textContent = '解鎖狀態';
-                lockBtn.className = 'unlocked';
-                lockBtn.style.backgroundColor = '#22c55e';
-                modeBtn.textContent = '模式：局端 (逆時針)';
-                modeBtn.style.backgroundColor = '#3b82f6';
+                    // 把所有圓環轉回 0 度
+                    Object.values(rings).forEach(r => {
+                        r.rotation = 0;
+                        r.element.style.transform = `rotate(0deg)`;
+                        r.element.classList.remove('locked');
+                    });
 
-                renderCircles();
-                toggleSidebar();
-            }
-        });
+                    // 把上方按鈕變回初始外觀
+                    lockBtn.textContent = '解鎖狀態';
+                    lockBtn.className = 'unlocked';
+                    lockBtn.style.backgroundColor = '#22c55e';
+                    modeBtn.textContent = '模式：局端 (逆時針)';
+                    modeBtn.style.backgroundColor = '#3b82f6';
 
-        // 啟動程式
-        init();
+                    renderCircles(); // 重新渲染乾淨的畫面
+                    toggleSidebar(); // 收起選單
+                }
+            });
 
+            // 🚀 執行主程式：啟動！
+            init();
+
+        }); // DOMContentLoaded 結束
     </script>
 </body>
 </html>
