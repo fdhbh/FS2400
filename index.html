@@ -96,17 +96,17 @@
             align-items: center;
             justify-content: center;
             font-weight: bold;
-            font-size: 14px;
+            font-size: 24px; /* 字體跟著放大，讓數字更清楚 */
             color: black;
             transform-origin: center center;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.15); /* 稍微加深陰影增加立體感 */
             user-select: none;
         }
 
         .circle.representative {
             background-color: #fef08a; /* 代表圈黃色底 */
-            border-width: 3px;
-            border-color: #2563eb; /* 代表圈外框改為藍色 */
+            border-width: 4px; /* 配合放大，邊框再加粗一點 */
+            border-color: #2563eb; /* 藍色外框 */
         }
 
         /* 新增狀態與提示樣式 */
@@ -119,19 +119,19 @@
         .circle[data-status]::after {
             content: attr(data-status);
             position: absolute;
-            top: -24px;
+            top: -28px; /* 配合變大的圈圈往上微調，避免重疊 */
             left: 50%;
             transform: translateX(-50%);
-            font-size: 11px;
+            font-size: 13px; /* 狀態標籤字體微調放大 */
             font-weight: bold;
             white-space: nowrap;
             color: #111;
             background: rgba(255,255,255,0.95);
-            padding: 2px 6px;
+            padding: 3px 8px;
             border-radius: 4px;
             border: 1px solid #ccc;
             box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-            pointer-events: none; /* 防止點擊干擾 */
+            pointer-events: none;
         }
 
     </style>
@@ -171,11 +171,12 @@
         let mode = 'CO'; // 'CO' = 局端(逆), 'CPE' = 用戶端(順)
         const circleStates = {}; // 儲存每個號碼的狀態
 
-        // 圓環設定檔 (圈圈放大1.1倍，為44px，半徑同步微調以防重疊)
+        // 圓環設定檔 (圈圈放大為80px，半徑同步向外推展以防重疊)
+        // 內圈半徑 60，中圈半徑 145，外圈半徑 230，確保每個環之間有足夠間隙
         const ringConfigs = [
-            { id: 'inner', radius: 60, count: 4, seq: [4, 1, 2, 3], size: 44 },
-            { id: 'middle', radius: 125, count: 8, seq: [12, 5, 6, 7, 8, 9, 10, 11], size: 44 },
-            { id: 'outer', radius: 190, count: 12, seq: [24, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23], size: 44 }
+            { id: 'inner', radius: 60, count: 4, seq: [4, 1, 2, 3], size: 80 },
+            { id: 'middle', radius: 145, count: 8, seq: [12, 5, 6, 7, 8, 9, 10, 11], size: 80 },
+            { id: 'outer', radius: 230, count: 12, seq: [24, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23], size: 80 }
         ];
 
         const container = document.getElementById('wheelContainer');
@@ -215,10 +216,15 @@
             window.addEventListener('resize', resizeApp); // 監聽螢幕旋轉或視窗大小改變
         }
 
+        // ... init() 函數保持不變 ...
+
         // 自動縮放畫布，避免在手機上被裁切
         function resizeApp() {
             const { width, height } = container.getBoundingClientRect();
-            const sizeNeeded = 190 * 2 + 80; // 外圈半徑 * 2 + 預留邊距
+            // sizeNeeded = 外圈半徑(230) * 2 + 圈圈直徑(80) + 安全邊距(20) = 560
+            const sizeNeeded = 560; 
+            
+            // 計算縮放比例，確保最寬不會超過手機螢幕
             const scale = Math.min(1, width / sizeNeeded, height / sizeNeeded);
             scaleWrapper.style.transform = `scale(${scale})`;
         }
