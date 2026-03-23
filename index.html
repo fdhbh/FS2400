@@ -17,30 +17,35 @@
         body {
             margin: 0;
             overflow: hidden;
-            background-color: #000000;
+            background-color: #000000; /* 配合您的測試，預設改為黑色，可隨意修改 */
             touch-action: none;
             font-family: sans-serif;
             display: flex;
-            flex-direction: colu
+            flex-direction: column;
             height: 100vh;
+            height: 100dvh; /* 解決 iOS 底部網址列會吃掉高度的問題 */
         }
 
+        /* 修正控制列重疊問題 */
         .controls {
             display: flex;
             justify-content: center;
-            gap: 15px;
-            padding: 20px;
+            align-items: center;
+            flex-wrap: wrap; /* 螢幕太小時允許換行 */
+            gap: 10px;
+            /* 左邊空出 65px，確保不會被漢堡選單按鈕蓋住 */
+            padding: 15px 15px 15px 65px; 
             background: white;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
             z-index: 10;
         }
 
         button {
-            padding: 10px 20px;
+            padding: 8px 16px;
             border-radius: 8px;
             border: none;
             font-weight: bold;
-            font-size: 16px;
+            font-size: 14px; /* 按鈕文字稍微縮小以適應手機 */
             cursor: pointer;
             transition: all 0.2s;
         }
@@ -57,24 +62,33 @@
             position: relative;
         }
 
+        /* 修正 iOS 縮放核心：給予固定的大尺寸，禁止擠壓 */
+        #scaleWrapper {
+            position: relative;
+            width: 680px; 
+            height: 680px;
+            flex-shrink: 0; /* 確保不會被 flexbox 壓縮 */
+        }
+
         .center-point {
             position: absolute;
             width: 4px;
             height: 4px;
-            background: black;
+            background: white; /* 黑底時改為白色比較明顯 */
             border-radius: 50%;
             z-index: 0;
+            /* 強制置中 */
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
         }
 
         .ring {
             position: absolute;
             border-radius: 50%;
-            border: 1px solid black;
+            border: 1px solid #666; /* 黑底時軌道線調淡一點 */
             transform-origin: center center;
             cursor: grab;
-            display: flex;
-            align-items: center;
-            justify-content: center;
         }
         
         .ring:active { cursor: grabbing; }
@@ -83,7 +97,7 @@
         .circle {
             position: absolute;
             border-radius: 50%;
-            border: 2px solid white;
+            border: 2px solid red;
             background: white;
             display: flex;
             align-items: center;
@@ -92,7 +106,7 @@
             font-size: 24px;
             color: black;
             transform-origin: center center;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
             user-select: none;
         }
 
@@ -102,16 +116,16 @@
             border-color: #2563eb;
         }
 
-        /* 長按標記的圈圈狀態顏色 */
         .state-a-front { background-color: #bfdbfe !important; border-color: #3b82f6 !important; color: #1e3a8a !important; }
         .state-a-back { background-color: #2563eb !important; border-color: #1e3a8a !important; color: white !important; }
         .state-b-front { background-color: #e9d5ff !important; border-color: #a855f7 !important; color: #581c87 !important; }
         .state-b-back { background-color: #9333ea !important; border-color: #581c87 !important; color: white !important; }
         .state-done { background-color: #22c55e !important; border-color: #14532d !important; color: white !important; }
 
-        /* 全新的獨立狀態標籤樣式 (解決被蓋住的問題) */
         .status-label {
             position: absolute;
+            top: 0;
+            left: 0;
             font-size: 13px;
             font-weight: bold;
             white-space: nowrap;
@@ -121,14 +135,14 @@
             border-radius: 4px;
             border: 1px solid #ccc;
             box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-            pointer-events: none; /* 讓點擊穿透，不會干擾底下的圈圈拖曳 */
-            z-index: 50; /* 永遠在最上層 */
+            pointer-events: none; 
+            z-index: 50; 
         }
     </style>
 </head>
 <body>
 
-    <button id="menuBtn" class="fixed top-4 left-4 z-50 bg-gray-800 text-white w-10 h-10 rounded-md shadow-lg flex items-center justify-center text-xl transition-transform active:scale-95">
+    <button id="menuBtn" class="fixed top-3 left-3 z-50 bg-gray-800 text-white w-10 h-10 rounded-md shadow-lg flex items-center justify-center text-xl transition-transform active:scale-95">
         ☰
     </button>
 
@@ -152,7 +166,7 @@
     </div>
 
     <div class="wheel-container" id="wheelContainer">
-        <div id="scaleWrapper" style="position: relative; width: 0; height: 0; display: flex; align-items: center; justify-content: center;">
+        <div id="scaleWrapper">
             <div class="center-point"></div>
             <div id="labelsLayer" class="absolute top-1/2 left-1/2 w-0 h-0 z-50 pointer-events-none"></div>
         </div>
@@ -187,7 +201,7 @@
 
             const container = document.getElementById('wheelContainer');
             const scaleWrapper = document.getElementById('scaleWrapper');
-            const labelsLayer = document.getElementById('labelsLayer'); // 抓取新的標籤層
+            const labelsLayer = document.getElementById('labelsLayer');
             const lockBtn = document.getElementById('lockBtn');
             const modeBtn = document.getElementById('modeBtn');
             const rings = {};
@@ -237,30 +251,26 @@
                 const rect = container.getBoundingClientRect();
                 const width = rect.width || window.innerWidth;
                 const height = rect.height || window.innerHeight;
-                // 加大安全範圍至 680，因為標籤被推到圈圈外面了，確保手機螢幕不會裁切到文字
+                // 因為 scaleWrapper 已經是固定 680x680，我們以此作為基準進行縮放
                 const sizeNeeded = 680; 
                 const scale = Math.max(0.2, Math.min(1, width / sizeNeeded, height / sizeNeeded));
                 scaleWrapper.style.transform = `scale(${scale})`;
             }
 
-            // 更新文字與標籤的直立狀態與位置
             function updateCirclesRotation(ringObj) {
                 const { radius } = ringObj.config;
                 const currentRingRot = ringObj.rotation;
 
                 ringObj.circles.forEach(circle => {
                     const placementAngle = parseFloat(circle.dataset.placementAngle);
-                    // theta 是這個圈圈目前在畫面上「真實的絕對角度」
                     const theta = placementAngle + currentRingRot;
                     
-                    // 圈圈維持直立
                     circle.style.transform = `
                         rotate(${placementAngle}deg) 
                         translate(${radius}px) 
                         rotate(${-theta}deg)
                     `;
 
-                    // 智慧放射狀定位：讓標籤沿著 theta 角度，向外推 radius + 56px 的距離，並保持直立
                     if (circle._statusLabel) {
                         circle._statusLabel.style.transform = `
                             rotate(${theta}deg) 
@@ -358,7 +368,7 @@
             }
 
             function renderCircles() {
-                labelsLayer.innerHTML = ''; // 每次重新渲染時，清空所有的標籤
+                labelsLayer.innerHTML = ''; 
 
                 Object.values(rings).forEach(ringObj => {
                     const { element, config } = ringObj;
@@ -373,6 +383,12 @@
                         circle.style.height = `${config.size}px`;
                         circle.innerText = num;
 
+                        // 強制將圓圈錨點鎖在軌道正中央
+                        circle.style.top = '50%';
+                        circle.style.left = '50%';
+                        circle.style.marginTop = `-${config.size / 2}px`;
+                        circle.style.marginLeft = `-${config.size / 2}px`;
+
                         let baseAngle = -90;
                         let placementAngle = mode === 'CO' 
                             ? baseAngle - (index * angleStep) 
@@ -380,19 +396,15 @@
                         
                         circle.dataset.placementAngle = placementAngle; 
 
-                        // 判斷該號碼是否有狀態
                         if (circleStates[num]) {
-                            // 替圈圈上色
                             circle.setAttribute('data-status', circleStates[num]);
                             circle.classList.add(getStateClass(circleStates[num]));
 
-                            // 產生獨立的標籤並丟入最上層的 labelsLayer
                             const labelEl = document.createElement('div');
                             labelEl.className = 'status-label';
                             labelEl.innerText = circleStates[num];
                             labelsLayer.appendChild(labelEl);
 
-                            // 將標籤與圈圈綁定，方便旋轉時同步更新位置
                             circle._statusLabel = labelEl;
                         }
 
@@ -412,12 +424,18 @@
                     ringEl.id = `ring-${config.id}`;
                     ringEl.style.width = `${config.radius * 2}px`;
                     ringEl.style.height = `${config.radius * 2}px`;
+                    
+                    // 強制將軌道錨點鎖定在 wrapper 正中央，徹底解決 iOS 漂移問題
+                    ringEl.style.top = '50%';
+                    ringEl.style.left = '50%';
+                    ringEl.style.marginTop = `-${config.radius}px`;
+                    ringEl.style.marginLeft = `-${config.radius}px`;
+
                     ringEl.style.zIndex = ringConfigs.length - ringConfigs.indexOf(config);
                     
                     rings[config.id] = { element: ringEl, config: config, rotation: 0, circles: [] };
                     bindRotationEvents(ringEl, rings[config.id]);
                     
-                    // 將環插入到 labelsLayer 之前，確保 labelsLayer 永遠在最下面(DOM順序，搭配 z-index)
                     scaleWrapper.insertBefore(ringEl, labelsLayer);
                 });
 
@@ -427,7 +445,6 @@
                 window.addEventListener('resize', resizeApp); 
             }
 
-            // 控制按鈕
             lockBtn.addEventListener('click', () => {
                 isLocked = !isLocked;
                 if (isLocked) {
