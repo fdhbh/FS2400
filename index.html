@@ -14,6 +14,11 @@
     </script>
 
     <style>
+        /* 【新增】定義全域變數，用來即時連動文字大小 */
+        :root {
+            --label-font-size: 12px;
+        }
+
         body {
             margin: 0;
             overflow: hidden;
@@ -73,6 +78,8 @@
             width: 680px; 
             height: 680px;
             flex-shrink: 0;
+            /* 讓縮放過渡更平滑 */
+            transition: transform 0.1s ease-out;
         }
 
         .center-point {
@@ -112,7 +119,6 @@
             transform-origin: center center;
             box-shadow: 0 2px 5px rgba(0,0,0,0.3);
             
-            /* 【修正 Android 長按 Bug】封鎖系統預設長按選單與文字選取 */
             user-select: none;
             -webkit-user-select: none;
             -webkit-touch-callout: none;
@@ -134,7 +140,7 @@
             position: absolute;
             top: 0;
             left: 0;
-            font-size: 13px;
+            font-size: var(--label-font-size); /* 套用全域變數 */
             font-weight: bold;
             white-space: nowrap;
             color: #111;
@@ -146,6 +152,11 @@
             pointer-events: none; 
             z-index: 50; 
         }
+
+        /* 拉條(Range)的簡易美化 */
+        input[type=range] {
+            accent-color: #3b82f6;
+        }
     </style>
 </head>
 <body>
@@ -156,12 +167,33 @@
 
     <div id="sidebarOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden transition-opacity"></div>
     
-    <div id="sidebar" class="fixed top-0 left-0 w-64 h-full bg-white shadow-2xl z-50 transform -translate-x-full transition-transform duration-300 flex flex-col p-6 gap-4">
-        <h2 class="text-xl font-bold mb-4 border-b pb-2 text-gray-800">系統選單</h2>
+    <div id="sidebar" class="fixed top-0 left-0 w-64 h-full bg-white shadow-2xl z-50 transform -translate-x-full transition-transform duration-300 flex flex-col p-6 gap-4 overflow-y-auto">
+        <h2 class="text-xl font-bold mb-2 border-b pb-2 text-gray-800">系統選單</h2>
+        
+        <div class="flex flex-col gap-3 mb-2 bg-gray-50 p-3 rounded-lg border border-gray-200">
+            <h3 class="text-sm font-bold text-gray-800">外觀微調</h3>
+            
+            <div class="flex flex-col gap-1">
+                <label class="text-xs font-bold text-gray-600 flex justify-between">
+                    <span>圈圈整體縮放</span>
+                    <span id="scaleValDisplay" class="text-blue-600">1.0x</span>
+                </label>
+                <input type="range" id="scaleSlider" min="0.5" max="1.5" step="0.1" value="1.0" class="w-full">
+            </div>
+
+            <div class="flex flex-col gap-1 mt-2">
+                <label class="text-xs font-bold text-gray-600 flex justify-between">
+                    <span>狀態文字大小</span>
+                    <span id="fontValDisplay" class="text-blue-600">12px</span>
+                </label>
+                <input type="range" id="fontSlider" min="10" max="24" step="1" value="12" class="w-full">
+            </div>
+        </div>
+
         <button id="saveBtn" class="bg-blue-500 text-white py-3 rounded-lg font-bold shadow hover:bg-blue-600 active:bg-blue-700 transition">
             💾 儲存目前進度
         </button>
-        <p class="text-xs text-gray-500 mb-auto">儲存後，即使重整網頁或關閉分頁，下次開啟時會自動恢復設定檔與旋轉角度。</p>
+        <p class="text-xs text-gray-500 mb-auto">儲存後，即使重整網頁，也會恢復設定檔、旋轉角度與自訂外觀大小。</p>
         
         <button id="resetBtn" class="bg-red-500 text-white py-3 rounded-lg font-bold shadow hover:bg-red-600 active:bg-red-700 transition">
             ⚠️ 還原初始狀態
@@ -201,6 +233,10 @@
             let mode = 'CO'; 
             const circleStates = {}; 
 
+            // 【新增】拉條數值變數
+            let customScale = 1.0;
+            let customFontSize = 12;
+
             const ringConfigs = [
                 { id: 'inner', radius: 60, count: 4, seq: [4, 1, 2, 3], size: 80 },
                 { id: 'middle', radius: 145, count: 8, seq: [12, 5, 6, 7, 8, 9, 10, 11], size: 80 },
@@ -213,6 +249,12 @@
             const lockBtn = document.getElementById('lockBtn');
             const modeBtn = document.getElementById('modeBtn');
             const rings = {};
+
+            // 取得拉條 DOM 元素
+            const scaleSlider = document.getElementById('scaleSlider');
+            const scaleValDisplay = document.getElementById('scaleValDisplay');
+            const fontSlider = document.getElementById('fontSlider');
+            const fontValDisplay = document.getElementById('fontValDisplay');
 
             if (!container || !scaleWrapper || !lockBtn || !modeBtn || !labelsLayer) {
                 console.error("找不到核心 HTML 元素");
@@ -228,6 +270,10 @@
                         isLocked = !!state.isLocked;
                         
                         Object.assign(circleStates, state.circleStates || {});
+
+                        // 【新增】讀取儲存的縮放與文字大小
+                        if (state.customScale) customScale = state.customScale;
+                        if (state.customFontSize) customFontSize = state.customFontSize;
 
                         if (state.rotations) {
                             if (rings.inner) rings.inner.rotation = state.rotations.inner || 0;
@@ -253,19 +299,43 @@
                 } catch (e) {
                     console.warn("目前環境不支援讀取存檔", e);
                 }
+
+                // 讀取完畢後，將數值套用到拉條與畫面上
+                scaleSlider.value = customScale;
+                scaleValDisplay.innerText = parseFloat(customScale).toFixed(1) + 'x';
+                
+                fontSlider.value = customFontSize;
+                fontValDisplay.innerText = customFontSize + 'px';
+                document.documentElement.style.setProperty('--label-font-size', customFontSize + 'px');
             }
 
             function resizeApp() {
-                // 【修正旋轉 Bug】改抓 window 實際大小，而不是 container 的大小，避免被延遲計算搞壞
                 const width = window.innerWidth;
                 const height = window.innerHeight;
                 
                 const sizeNeeded = 680; 
                 const availableHeight = height - 80; 
-                const scale = Math.max(0.2, Math.min(1, width / sizeNeeded, availableHeight / sizeNeeded));
+                // 基礎自適應比例
+                const baseScale = Math.max(0.2, Math.min(1, width / sizeNeeded, availableHeight / sizeNeeded));
                 
-                scaleWrapper.style.transform = `scale(${scale})`;
+                // 【修改】將基礎比例乘上使用者自訂的縮放倍率 (customScale)
+                scaleWrapper.style.transform = `scale(${baseScale * customScale})`;
             }
+
+            // 【新增】拉條滑動事件監聽
+            scaleSlider.addEventListener('input', (e) => {
+                customScale = parseFloat(e.target.value);
+                scaleValDisplay.innerText = customScale.toFixed(1) + 'x';
+                resizeApp(); // 即時縮放畫面
+            });
+
+            fontSlider.addEventListener('input', (e) => {
+                customFontSize = parseInt(e.target.value);
+                fontValDisplay.innerText = customFontSize + 'px';
+                // 透過 CSS 變數即時改變所有標籤的大小
+                document.documentElement.style.setProperty('--label-font-size', customFontSize + 'px');
+            });
+
 
             function updateCirclesRotation(ringObj) {
                 const { radius } = ringObj.config;
@@ -348,7 +418,6 @@
             function bindLongPressEvent(circle, num) {
                 const startPress = (e) => {
                     if (!isLocked) return; 
-                    // 不要在這裡呼叫 e.preventDefault()，避免干擾原生觸控流程
                     
                     longPressTimer = setTimeout(() => {
                         activeCircleNum = num;
@@ -359,16 +428,14 @@
 
                 const cancelPress = () => clearTimeout(longPressTimer);
 
-                // 【修正 Android 長按 Bug】加入 touchcancel 偵測
                 circle.addEventListener('touchstart', startPress, { passive: true });
                 circle.addEventListener('mousedown', startPress);
                 circle.addEventListener('touchend', cancelPress);
                 circle.addEventListener('touchmove', cancelPress);
-                circle.addEventListener('touchcancel', cancelPress); // Android 很容易亂發這個事件
+                circle.addEventListener('touchcancel', cancelPress);
                 circle.addEventListener('mouseup', cancelPress);
                 circle.addEventListener('mouseleave', cancelPress);
                 
-                // 【修正 Android 長按 Bug】徹底阻擋 Android 的系統右鍵選單
                 circle.addEventListener('contextmenu', (e) => {
                     if (isLocked) e.preventDefault();
                 });
@@ -415,7 +482,11 @@
 
                         if (circleStates[num]) {
                             circle.setAttribute('data-status', circleStates[num]);
-                            circle.classList.add(getStateClass(circleStates[num]));
+                            
+                            const stateClass = getStateClass(circleStates[num]);
+                            if (stateClass) {
+                                circle.classList.add(stateClass);
+                            }
 
                             if (circleStates[num] !== '完成') {
                                 const labelEl = document.createElement('div');
@@ -460,7 +531,6 @@
                 renderCircles();
                 resizeApp(); 
 
-                // 【修正旋轉 Bug】加入延遲執行，確保瀏覽器 UI 動畫跑完再算大小
                 window.addEventListener('resize', () => {
                     setTimeout(resizeApp, 100);
                     setTimeout(resizeApp, 300);
@@ -550,10 +620,13 @@
                             inner: rings.inner.rotation,
                             middle: rings.middle.rotation,
                             outer: rings.outer.rotation
-                        }
+                        },
+                        // 【新增】將使用者的拉條設定一併存起來
+                        customScale: customScale,
+                        customFontSize: customFontSize
                     };
                     localStorage.setItem('fs2400_state', JSON.stringify(stateToSave));
-                    alert('✅ 儲存成功！\n下次開啟網頁將自動載入目前的狀態。');
+                    alert('✅ 儲存成功！\n下次開啟網頁將自動載入目前的狀態與外觀設定。');
                 } catch (e) {
                     alert('⚠️ 儲存失敗：您可能使用了無痕模式或在不支援的瀏覽器開啟，無法寫入進度。');
                 }
@@ -581,7 +654,17 @@
                     modeBtn.textContent = '模式：局端 (逆時針)';
                     modeBtn.style.backgroundColor = '#3b82f6';
 
+                    // 【新增】重置拉條與變數
+                    customScale = 1.0;
+                    customFontSize = 12;
+                    scaleSlider.value = 1.0;
+                    scaleValDisplay.innerText = '1.0x';
+                    fontSlider.value = 12;
+                    fontValDisplay.innerText = '12px';
+                    document.documentElement.style.setProperty('--label-font-size', '12px');
+
                     renderCircles();
+                    resizeApp(); // 重算縮放
                     toggleSidebar();
                 }
             });
