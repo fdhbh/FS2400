@@ -111,7 +111,11 @@
             color: black;
             transform-origin: center center;
             box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            
+            /* 【修正 Android 長按 Bug】封鎖系統預設長按選單與文字選取 */
             user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
         }
 
         .circle.representative {
@@ -179,10 +183,10 @@
     <div id="statusModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
         <div class="bg-white p-6 rounded-lg shadow-lg w-64 flex flex-col gap-3">
             <h3 class="text-lg font-bold mb-2 text-center text-gray-800">設定線路狀態</h3>
-            <button class="status-btn bg-blue-100 text-blue-800 border border-blue-300 py-2 rounded font-bold" data-val="A組打前50">A組打前50</button>
-            <button class="status-btn bg-blue-500 text-white py-2 rounded font-bold" data-val="A組打後50">A組打後50</button>
-            <button class="status-btn bg-purple-100 text-purple-800 border border-purple-300 py-2 rounded font-bold" data-val="B組打前50">B組打前50</button>
-            <button class="status-btn bg-purple-500 text-white py-2 rounded font-bold" data-val="B組打後50">B組打後50</button>
+            <button class="status-btn bg-blue-100 text-blue-800 border border-blue-300 py-2 rounded font-bold" data-val="輝組打前50">輝組打前50</button>
+            <button class="status-btn bg-blue-500 text-white py-2 rounded font-bold" data-val="輝組打後50">輝組打後50</button>
+            <button class="status-btn bg-purple-100 text-purple-800 border border-purple-300 py-2 rounded font-bold" data-val="神組打前50">神組打前50</button>
+            <button class="status-btn bg-purple-500 text-white py-2 rounded font-bold" data-val="神組打後50">神組打後50</button>
             <button class="status-btn bg-green-500 text-white py-2 rounded font-bold" data-val="完成">完成 (改變顏色)</button>
             <hr class="my-1 border-gray-200">
             <button class="status-btn bg-gray-100 text-gray-600 border border-gray-300 py-2 rounded font-bold" data-val="">清除狀態</button>
@@ -252,9 +256,9 @@
             }
 
             function resizeApp() {
-                const rect = container.getBoundingClientRect();
-                const width = rect.width || window.innerWidth;
-                const height = rect.height || window.innerHeight;
+                // 【修正旋轉 Bug】改抓 window 實際大小，而不是 container 的大小，避免被延遲計算搞壞
+                const width = window.innerWidth;
+                const height = window.innerHeight;
                 
                 const sizeNeeded = 680; 
                 const availableHeight = height - 80; 
@@ -294,7 +298,6 @@
                 let initialRotation = 0;
 
                 const getAngle = (x, y) => {
-                    const rect = container.getBoundingClientRect();
                     const scaleWrapperRect = scaleWrapper.getBoundingClientRect();
                     const centerX = scaleWrapperRect.left + scaleWrapperRect.width / 2;
                     const centerY = scaleWrapperRect.top + scaleWrapperRect.height / 2;
@@ -345,7 +348,8 @@
             function bindLongPressEvent(circle, num) {
                 const startPress = (e) => {
                     if (!isLocked) return; 
-                    e.preventDefault(); 
+                    // 不要在這裡呼叫 e.preventDefault()，避免干擾原生觸控流程
+                    
                     longPressTimer = setTimeout(() => {
                         activeCircleNum = num;
                         statusModal.classList.remove('hidden');
@@ -355,20 +359,27 @@
 
                 const cancelPress = () => clearTimeout(longPressTimer);
 
-                circle.addEventListener('touchstart', startPress, { passive: false });
+                // 【修正 Android 長按 Bug】加入 touchcancel 偵測
+                circle.addEventListener('touchstart', startPress, { passive: true });
                 circle.addEventListener('mousedown', startPress);
                 circle.addEventListener('touchend', cancelPress);
                 circle.addEventListener('touchmove', cancelPress);
+                circle.addEventListener('touchcancel', cancelPress); // Android 很容易亂發這個事件
                 circle.addEventListener('mouseup', cancelPress);
                 circle.addEventListener('mouseleave', cancelPress);
+                
+                // 【修正 Android 長按 Bug】徹底阻擋 Android 的系統右鍵選單
+                circle.addEventListener('contextmenu', (e) => {
+                    if (isLocked) e.preventDefault();
+                });
             }
 
             function getStateClass(val) {
                 switch(val) {
-                    case 'A組打前50': return 'state-a-front';
-                    case 'A組打後50': return 'state-a-back';
-                    case 'B組打前50': return 'state-b-front';
-                    case 'B組打後50': return 'state-b-back';
+                    case '輝組打前50': return 'state-a-front';
+                    case '輝組打後50': return 'state-a-back';
+                    case '神組打前50': return 'state-b-front';
+                    case '神組打後50': return 'state-b-back';
                     case '完成': return 'state-done';
                     default: return '';
                 }
@@ -402,13 +413,10 @@
                         
                         circle.dataset.placementAngle = placementAngle; 
 
-                        // 【重點修改區塊】判斷號碼是否有狀態
                         if (circleStates[num]) {
-                            // 1. 不管什麼狀態，都替圈圈加上顏色
                             circle.setAttribute('data-status', circleStates[num]);
                             circle.classList.add(getStateClass(circleStates[num]));
 
-                            // 2. 如果狀態「不是」完成，才產生獨立的文字標籤
                             if (circleStates[num] !== '完成') {
                                 const labelEl = document.createElement('div');
                                 labelEl.className = 'status-label';
@@ -451,7 +459,16 @@
                 loadState(); 
                 renderCircles();
                 resizeApp(); 
-                window.addEventListener('resize', resizeApp); 
+
+                // 【修正旋轉 Bug】加入延遲執行，確保瀏覽器 UI 動畫跑完再算大小
+                window.addEventListener('resize', () => {
+                    setTimeout(resizeApp, 100);
+                    setTimeout(resizeApp, 300);
+                }); 
+                window.addEventListener('orientationchange', () => {
+                    setTimeout(resizeApp, 100);
+                    setTimeout(resizeApp, 300);
+                });
             }
 
             lockBtn.addEventListener('click', () => {
