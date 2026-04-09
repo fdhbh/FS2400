@@ -14,7 +14,6 @@
     </script>
 
     <style>
-        /* 【新增】定義全域變數，用來即時連動文字大小 */
         :root {
             --label-font-size: 12px;
         }
@@ -78,7 +77,6 @@
             width: 680px; 
             height: 680px;
             flex-shrink: 0;
-            /* 讓縮放過渡更平滑 */
             transition: transform 0.1s ease-out;
         }
 
@@ -140,7 +138,7 @@
             position: absolute;
             top: 0;
             left: 0;
-            font-size: var(--label-font-size); /* 套用全域變數 */
+            font-size: var(--label-font-size); 
             font-weight: bold;
             white-space: nowrap;
             color: #111;
@@ -153,10 +151,26 @@
             z-index: 50; 
         }
 
-        /* 拉條(Range)的簡易美化 */
-        input[type=range] {
-            accent-color: #3b82f6;
+        input[type=range] { accent-color: #3b82f6; }
+
+        #timerDisplay {
+            position: absolute;
+            bottom: calc(75px + env(safe-area-inset-bottom)); 
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(31, 41, 55, 0.85); 
+            color: white;
+            padding: 6px 16px;
+            border-radius: 9999px;
+            font-family: monospace;
+            font-size: 1.25rem;
+            font-weight: bold;
+            letter-spacing: 2px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            z-index: 30;
+            backdrop-filter: blur(4px);
         }
+        #timerDisplay.idle { opacity: 0.6; }
     </style>
 </head>
 <body>
@@ -170,9 +184,20 @@
     <div id="sidebar" class="fixed top-0 left-0 w-64 h-full bg-white shadow-2xl z-50 transform -translate-x-full transition-transform duration-300 flex flex-col p-6 gap-4 overflow-y-auto">
         <h2 class="text-xl font-bold mb-2 border-b pb-2 text-gray-800">系統選單</h2>
         
+        <div class="flex flex-col gap-3 mb-2 bg-slate-100 p-3 rounded-lg border border-slate-300">
+            <h3 class="text-sm font-bold text-gray-800 flex justify-between">
+                <span>⏱️ 計時器</span>
+            </h3>
+            <div class="flex gap-2">
+                <button id="timerStartBtn" class="flex-1 bg-green-500 text-white p-2 rounded text-sm font-bold shadow active:scale-95 disabled:opacity-50 disabled:active:scale-100">Start</button>
+                <button id="timerPauseBtn" class="flex-1 bg-yellow-500 text-white p-2 rounded text-sm font-bold shadow active:scale-95 disabled:opacity-50 disabled:active:scale-100" disabled>Pause</button>
+                <button id="timerStopBtn" class="flex-1 bg-red-500 text-white p-2 rounded text-sm font-bold shadow active:scale-95">Stop</button>
+            </div>
+            <p class="text-[10px] text-gray-500 leading-tight">支援離線背景計時。<br>從初次啟動算起，現實時間超過24小時自動重置。</p>
+        </div>
+
         <div class="flex flex-col gap-3 mb-2 bg-gray-50 p-3 rounded-lg border border-gray-200">
             <h3 class="text-sm font-bold text-gray-800">外觀微調</h3>
-            
             <div class="flex flex-col gap-1">
                 <label class="text-xs font-bold text-gray-600 flex justify-between">
                     <span>圈圈整體縮放</span>
@@ -180,7 +205,6 @@
                 </label>
                 <input type="range" id="scaleSlider" min="0.5" max="1.5" step="0.1" value="1.0" class="w-full">
             </div>
-
             <div class="flex flex-col gap-1 mt-2">
                 <label class="text-xs font-bold text-gray-600 flex justify-between">
                     <span>狀態文字大小</span>
@@ -190,11 +214,9 @@
             </div>
         </div>
 
-        <button id="saveBtn" class="bg-blue-500 text-white py-3 rounded-lg font-bold shadow hover:bg-blue-600 active:bg-blue-700 transition">
+        <button id="saveBtn" class="bg-blue-500 text-white py-3 rounded-lg font-bold shadow hover:bg-blue-600 active:bg-blue-700 transition mt-auto">
             💾 儲存目前進度
         </button>
-        <p class="text-xs text-gray-500 mb-auto">儲存後，即使重整網頁，也會恢復設定檔、旋轉角度與自訂外觀大小。</p>
-        
         <button id="resetBtn" class="bg-red-500 text-white py-3 rounded-lg font-bold shadow hover:bg-red-600 active:bg-red-700 transition">
             ⚠️ 還原初始狀態
         </button>
@@ -206,6 +228,8 @@
             <div id="labelsLayer" class="absolute top-1/2 left-1/2 w-0 h-0 z-50 pointer-events-none"></div>
         </div>
     </div>
+    
+    <div id="timerDisplay" class="idle">00:00:00</div>
 
     <div class="controls">
         <button id="lockBtn" class="unlocked">解鎖狀態</button>
@@ -233,9 +257,139 @@
             let mode = 'CO'; 
             const circleStates = {}; 
 
-            // 【新增】拉條數值變數
             let customScale = 1.0;
             let customFontSize = 12;
+
+            // ================= 計時器變數與核心邏輯 =================
+            let timerState = 'idle'; 
+            let timerStartTime = 0;  
+            let timerElapsedTime = 0; 
+            let timerAbsoluteStartTime = 0; // 【新增】記錄第一次按下 Start 的現實絕對時間
+            let timerInterval = null; 
+
+            const timerDisplay = document.getElementById('timerDisplay');
+            const timerStartBtn = document.getElementById('timerStartBtn');
+            const timerPauseBtn = document.getElementById('timerPauseBtn');
+            const timerStopBtn = document.getElementById('timerStopBtn');
+
+            function formatTime(ms) {
+                let totalSeconds = Math.floor(ms / 1000);
+                let hours = Math.floor(totalSeconds / 3600);
+                let minutes = Math.floor((totalSeconds % 3600) / 60);
+                let seconds = totalSeconds % 60;
+                return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            }
+
+            function updateTimerDisplay() {
+                if (timerState === 'running') {
+                    const now = Date.now();
+                    const currentElapsed = (now - timerStartTime);
+                    timerDisplay.innerText = formatTime(currentElapsed);
+                } else if (timerState === 'paused') {
+                    timerDisplay.innerText = formatTime(timerElapsedTime);
+                } else {
+                    timerDisplay.innerText = "00:00:00";
+                }
+            }
+
+            function updateTimerUI() {
+                if (timerState === 'running') {
+                    timerStartBtn.disabled = true;
+                    timerPauseBtn.disabled = false;
+                    timerStartBtn.innerText = 'Start';
+                    timerDisplay.classList.remove('idle');
+                } else if (timerState === 'paused') {
+                    timerStartBtn.disabled = false;
+                    timerPauseBtn.disabled = true;
+                    timerStartBtn.innerText = 'Resume'; 
+                    timerDisplay.classList.remove('idle');
+                } else {
+                    timerStartBtn.disabled = false;
+                    timerPauseBtn.disabled = true;
+                    timerStartBtn.innerText = 'Start';
+                    timerDisplay.classList.add('idle');
+                }
+            }
+
+            function saveTimerState() {
+                const state = {
+                    state: timerState,
+                    startTime: timerStartTime,
+                    elapsedTime: timerElapsedTime,
+                    absoluteStartTime: timerAbsoluteStartTime // 【新增】把絕對時間存起來
+                };
+                localStorage.setItem('fs2400_timer', JSON.stringify(state));
+            }
+
+            function loadTimerState() {
+                try {
+                    const saved = localStorage.getItem('fs2400_timer');
+                    if (saved) {
+                        const t = JSON.parse(saved);
+                        const now = Date.now();
+                        const limit24H = 24 * 60 * 60 * 1000; 
+
+                        // 【邏輯更新】檢查「現在」跟「第一次按下Start」的時間差，是否大於 24 小時
+                        if (t.absoluteStartTime && (now - t.absoluteStartTime > limit24H)) {
+                            console.log("距初次啟動已超過 24 小時的現實時間，自動重置計時器。");
+                            localStorage.removeItem('fs2400_timer');
+                            return; 
+                        }
+
+                        timerState = t.state || 'idle';
+                        timerStartTime = t.startTime || 0;
+                        timerElapsedTime = t.elapsedTime || 0;
+                        timerAbsoluteStartTime = t.absoluteStartTime || 0; // 讀取絕對時間
+
+                        if (timerState === 'running') {
+                            timerInterval = setInterval(updateTimerDisplay, 1000);
+                        }
+                    }
+                } catch(e) {
+                    console.warn("讀取計時器失敗", e);
+                }
+                updateTimerDisplay();
+                updateTimerUI();
+            }
+
+            timerStartBtn.addEventListener('click', () => {
+                if (timerState === 'idle') {
+                    const now = Date.now();
+                    timerStartTime = now;
+                    timerAbsoluteStartTime = now; // 【新增】全新啟動時，記錄現實的絕對起點
+                    timerElapsedTime = 0;
+                } else if (timerState === 'paused') {
+                    timerStartTime = Date.now() - timerElapsedTime;
+                    // 繼續計時時，絕對起點 absoluteStartTime 保持不變，繼續延用舊的
+                }
+                timerState = 'running';
+                timerInterval = setInterval(updateTimerDisplay, 1000);
+                updateTimerUI();
+                saveTimerState();
+            });
+
+            timerPauseBtn.addEventListener('click', () => {
+                if (timerState === 'running') {
+                    timerElapsedTime = Date.now() - timerStartTime; 
+                    timerState = 'paused';
+                    clearInterval(timerInterval);
+                    updateTimerDisplay();
+                    updateTimerUI();
+                    saveTimerState();
+                }
+            });
+
+            timerStopBtn.addEventListener('click', () => {
+                timerState = 'idle';
+                timerStartTime = 0;
+                timerElapsedTime = 0;
+                timerAbsoluteStartTime = 0; // 歸零絕對時間
+                clearInterval(timerInterval);
+                updateTimerDisplay();
+                updateTimerUI();
+                saveTimerState(); 
+            });
+            // ================= 計時器邏輯結束 =================
 
             const ringConfigs = [
                 { id: 'inner', radius: 60, count: 4, seq: [4, 1, 2, 3], size: 80 },
@@ -250,7 +404,6 @@
             const modeBtn = document.getElementById('modeBtn');
             const rings = {};
 
-            // 取得拉條 DOM 元素
             const scaleSlider = document.getElementById('scaleSlider');
             const scaleValDisplay = document.getElementById('scaleValDisplay');
             const fontSlider = document.getElementById('fontSlider');
@@ -271,7 +424,6 @@
                         
                         Object.assign(circleStates, state.circleStates || {});
 
-                        // 【新增】讀取儲存的縮放與文字大小
                         if (state.customScale) customScale = state.customScale;
                         if (state.customFontSize) customFontSize = state.customFontSize;
 
@@ -300,7 +452,6 @@
                     console.warn("目前環境不支援讀取存檔", e);
                 }
 
-                // 讀取完畢後，將數值套用到拉條與畫面上
                 scaleSlider.value = customScale;
                 scaleValDisplay.innerText = parseFloat(customScale).toFixed(1) + 'x';
                 
@@ -315,24 +466,20 @@
                 
                 const sizeNeeded = 680; 
                 const availableHeight = height - 80; 
-                // 基礎自適應比例
                 const baseScale = Math.max(0.2, Math.min(1, width / sizeNeeded, availableHeight / sizeNeeded));
                 
-                // 【修改】將基礎比例乘上使用者自訂的縮放倍率 (customScale)
                 scaleWrapper.style.transform = `scale(${baseScale * customScale})`;
             }
 
-            // 【新增】拉條滑動事件監聽
             scaleSlider.addEventListener('input', (e) => {
                 customScale = parseFloat(e.target.value);
                 scaleValDisplay.innerText = customScale.toFixed(1) + 'x';
-                resizeApp(); // 即時縮放畫面
+                resizeApp(); 
             });
 
             fontSlider.addEventListener('input', (e) => {
                 customFontSize = parseInt(e.target.value);
                 fontValDisplay.innerText = customFontSize + 'px';
-                // 透過 CSS 變數即時改變所有標籤的大小
                 document.documentElement.style.setProperty('--label-font-size', customFontSize + 'px');
             });
 
@@ -528,6 +675,8 @@
                 });
 
                 loadState(); 
+                loadTimerState(); 
+                
                 renderCircles();
                 resizeApp(); 
 
@@ -621,7 +770,6 @@
                             middle: rings.middle.rotation,
                             outer: rings.outer.rotation
                         },
-                        // 【新增】將使用者的拉條設定一併存起來
                         customScale: customScale,
                         customFontSize: customFontSize
                     };
@@ -654,7 +802,6 @@
                     modeBtn.textContent = '模式：局端 (逆時針)';
                     modeBtn.style.backgroundColor = '#3b82f6';
 
-                    // 【新增】重置拉條與變數
                     customScale = 1.0;
                     customFontSize = 12;
                     scaleSlider.value = 1.0;
@@ -664,7 +811,7 @@
                     document.documentElement.style.setProperty('--label-font-size', '12px');
 
                     renderCircles();
-                    resizeApp(); // 重算縮放
+                    resizeApp(); 
                     toggleSidebar();
                 }
             });
