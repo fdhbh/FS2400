@@ -264,7 +264,7 @@
             let timerState = 'idle'; 
             let timerStartTime = 0;  
             let timerElapsedTime = 0; 
-            let timerAbsoluteStartTime = 0; // 【新增】記錄第一次按下 Start 的現實絕對時間
+            let timerAbsoluteStartTime = 0;
             let timerInterval = null; 
 
             const timerDisplay = document.getElementById('timerDisplay');
@@ -316,7 +316,7 @@
                     state: timerState,
                     startTime: timerStartTime,
                     elapsedTime: timerElapsedTime,
-                    absoluteStartTime: timerAbsoluteStartTime // 【新增】把絕對時間存起來
+                    absoluteStartTime: timerAbsoluteStartTime 
                 };
                 localStorage.setItem('fs2400_timer', JSON.stringify(state));
             }
@@ -329,7 +329,6 @@
                         const now = Date.now();
                         const limit24H = 24 * 60 * 60 * 1000; 
 
-                        // 【邏輯更新】檢查「現在」跟「第一次按下Start」的時間差，是否大於 24 小時
                         if (t.absoluteStartTime && (now - t.absoluteStartTime > limit24H)) {
                             console.log("距初次啟動已超過 24 小時的現實時間，自動重置計時器。");
                             localStorage.removeItem('fs2400_timer');
@@ -339,7 +338,7 @@
                         timerState = t.state || 'idle';
                         timerStartTime = t.startTime || 0;
                         timerElapsedTime = t.elapsedTime || 0;
-                        timerAbsoluteStartTime = t.absoluteStartTime || 0; // 讀取絕對時間
+                        timerAbsoluteStartTime = t.absoluteStartTime || 0; 
 
                         if (timerState === 'running') {
                             timerInterval = setInterval(updateTimerDisplay, 1000);
@@ -356,11 +355,10 @@
                 if (timerState === 'idle') {
                     const now = Date.now();
                     timerStartTime = now;
-                    timerAbsoluteStartTime = now; // 【新增】全新啟動時，記錄現實的絕對起點
+                    timerAbsoluteStartTime = now; 
                     timerElapsedTime = 0;
                 } else if (timerState === 'paused') {
                     timerStartTime = Date.now() - timerElapsedTime;
-                    // 繼續計時時，絕對起點 absoluteStartTime 保持不變，繼續延用舊的
                 }
                 timerState = 'running';
                 timerInterval = setInterval(updateTimerDisplay, 1000);
@@ -379,15 +377,19 @@
                 }
             });
 
+            // 【重點修改區塊】加入 confirm 防呆機制
             timerStopBtn.addEventListener('click', () => {
-                timerState = 'idle';
-                timerStartTime = 0;
-                timerElapsedTime = 0;
-                timerAbsoluteStartTime = 0; // 歸零絕對時間
-                clearInterval(timerInterval);
-                updateTimerDisplay();
-                updateTimerUI();
-                saveTimerState(); 
+                const confirmStop = confirm('⚠️ 確定要停止並重置計時器嗎？\n這將會清除目前的計時進度。');
+                if (confirmStop) {
+                    timerState = 'idle';
+                    timerStartTime = 0;
+                    timerElapsedTime = 0;
+                    timerAbsoluteStartTime = 0; 
+                    clearInterval(timerInterval);
+                    updateTimerDisplay();
+                    updateTimerUI();
+                    saveTimerState(); 
+                }
             });
             // ================= 計時器邏輯結束 =================
 
